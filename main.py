@@ -53,12 +53,9 @@ class Worker(QObject):
         """Metodo conectado con la clase principal que esta conectada a la UI, que empieza a correr una vez se da click al boton ejecutar mandando el archivo con ruta completa
         """
         self.progress = 0
-        print("Entro")
-        print(file_path)
-        print(f"progress: {self.progress}")
+        self.update_progress(4)
         self.validateFiles()
         self.update_progress(10)
-        print(f"Progreso de la barra despues de validar archivos es de: {self.progress}")
         self.executeProgram(file_path)
 
     def update_progress(self, value):
@@ -76,13 +73,11 @@ class Worker(QObject):
         """Funcion que nos manda la señal a la clase conectada con la UI
         """
         self.msg = ""
-        print(f"Entro al validateFiles con msg valor de: {self.msg}")
         self.msg = validationOfFiles()
         if self.msg:
             self.error_msg.emit(str(self.msg))
 
     def executeProgram(self, filePath):
-        msg = ""
         csv_path = os.getcwd() + "\csv_data\TC"
         query_path = os.getcwd() + "\csv_data\Query"
         #nombre_ad = input("Digite el nombre del archivo a buscar (adquirencia): ")
@@ -120,23 +115,24 @@ class Worker(QObject):
         data_to_read_final_csv = []
         for i in data_to_read_csv:
             if i not in available_files_csv:
-                self.msg = self.msg + f"\nNo se encuentró el archivo {i} en el directorio base de TC para poder hacer la consulta"
-                print(f"No se encuentra el archivo {i} en el directorio base de TC para poder hacer la consulta")
+                self.msg = self.msg + f"\nNo se encontró el archivo {i} para poder hacer la consulta completa"
+                print(f"No se encuentra el archivo {i} para poder hacer la consulta completa")
             else:
                 data_to_read_final_csv.append(i)
         data_to_read_final_q = []
         for i in data_to_read_q:
             if i not in available_files_q:
-                self.msg = self.msg + f"\nNo se encuentró el archivo {i} en el directorio base de qwerys para poder hacer la consulta"
-                print(f"No se encuentra el archivo {i} en el directorio base de qwerys para poder hacer la consulta")
+                self.msg = self.msg + f"\nNo se encontró el archivo {i} para poder hacer la consulta completa"
+                print(f"No se encuentra el archivo {i} para poder hacer la consulta completa")
             else:
                 data_to_read_final_q.append(i)
         ad = 0
         self.error_msg.emit(str(self.msg))
-        self.update_progress(18)
+        self.update_progress(17)
         #* Lectura de los archivos de PayU y creacion de llaves para la busqueda de cuenta
         cols = [2,3,4,7,8,11,15,16,21,32,48,60]
         datac = [pd.read_csv(csv_path+'\\'+i, sep=";", usecols=cols, low_memory=False) for i in data_to_read_final_csv]
+        self.update_progress(19)
         datac = pd.concat([i for i in datac], axis=0)
         datac.reset_index(drop=True, inplace=True)
         self.update_progress(22)
@@ -146,6 +142,7 @@ class Worker(QObject):
         datac["Processing value"] = datac["Processing value"].fillna(0)
         datac['Processing value'] = datac['Processing value'].astype('int64')
         datac['Extra1'] = datac['Extra1'].astype(str)
+        self.update_progress(24)
         datac["Llave_data"] = datac["Creation date"].dt.year.astype(str) + datac["Creation date"].dt.month.astype(str) + datac["Authorization code"].astype(str) + datac["Processing value"].astype(str)
         datac["Llave_data"] = datac["Llave_data"].astype('string')
         datac["Llave_data2"] = datac["Creation date"].dt.year.astype(str) + datac["Creation date"].dt.month.astype(str) + datac["Authorization code"].str[1:].astype(str) + datac["Processing value"].astype(str)
@@ -155,6 +152,7 @@ class Worker(QObject):
         self.update_progress(25)
         #* Lectura de los querys + creacion llaves para busqueda
         dataq = [pd.read_excel(query_path+'\\'+i) for i in data_to_read_final_q]
+        self.update_progress(28)
         dataq = pd.concat([i for i in dataq], axis=0)
         dataq.reset_index(drop=True, inplace=True)
         dataq["Llave"] = dataq["FECHA_PAGO"].dt.year.astype(str) + dataq["FECHA_PAGO"].dt.month.astype(str) + dataq["FECHA_PAGO"].dt.day.astype(str) + dataq["CUENTA"].astype(str)
@@ -172,7 +170,8 @@ class Worker(QObject):
             ad_months[i].loc[ad_months[i]["Franquicia"].isnull(), 'Franquicia'] = ad_months[i][llave_ad].map(datac.drop_duplicates(llave_data).set_index(llave_data)["Franchise"])
 
         wb = Workbook()
-        self.update_progress(35)
+        cont = 35
+        self.update_progress(cont)
         for i in range(len(ad_months)):
             #* Creacion de index
             ad_months[i].insert(0, "#", ad_months[i].index)
@@ -187,16 +186,22 @@ class Worker(QObject):
             ad_months[i]["Llave_ad"] = ad_months[i][["Llave_ad"]].astype('string')
             ad_months[i]["Llave_ad2"] = ad_months[i]["F VALE"].dt.year.astype(str) + ad_months[i]["F VALE"].dt.month.astype(str) + ad_months[i]["AUTORIZACION"].astype(str) + ad_months[i]["VLR ABONO"].astype(str)
             ad_months[i]["Llave_ad2"] = ad_months[i][["Llave_ad2"]].astype('string')
+            cont += ((50/len(ad_months))/5)
+            self.update_progress(cont)
             #* CRUCE DE DATOS
             ad_months[i]["Cuenta"] = ad_months[i]["Llave_ad"].map(datac.drop_duplicates("Llave_data").set_index("Llave_data")["Extra1"])
             ad_months[i]["Estado"] = ad_months[i]["Llave_ad"].map(datac.drop_duplicates("Llave_data").set_index("Llave_data")["Status"])
             ad_months[i]["Franquicia"] = ad_months[i]["Llave_ad"].map(datac.drop_duplicates("Llave_data").set_index("Llave_data")["Franchise"])
+            cont += ((50/len(ad_months))/5)
+            self.update_progress(cont)
             cruce("Llave_ad","Llave_data2", i)
             cruce("Llave_ad","Llave_data3", i)
             #* 2 cruce por tema de busqueda con vlr abono
             cruce("Llave_ad2","Llave_data", i)
             cruce("Llave_ad2","Llave_data2", i)
             cruce("Llave_ad2","Llave_data3", i)
+            cont += ((50/len(ad_months))/5)
+            self.update_progress(cont)
             #* Cambio de tipo de tados para nuevas llaves en queries
             ad_months[i]["Cuenta"] = ad_months[i]["Cuenta"].astype("float")
             ad_months[i]["Cuenta"] = ad_months[i]["Cuenta"].fillna(0)
@@ -212,6 +217,8 @@ class Worker(QObject):
             df.loc[df.duplicated(["#"]), ('F VALE','F ABONO','AUTORIZACION','VLR COMISION','VLR RETE ICA','VLR RETE FUENTE','VLR ABONO','Redondear','Llave')] = np.nan
             #? Realizar una copia de solo los # para sumar tanto Redondear y VALOR (VALOR de querys)
             c = df[["#","Redondear","VALOR"]].groupby("#").sum()
+            cont += ((50/len(ad_months))/5)
+            self.update_progress(cont)
             #? Realizar nueva columna con la resta de las 2 columnas, condiciones y nueva columna que nos induca si cruzo o no
             c["Resta"] = c["Redondear"] - c["VALOR"]
             conditions = [
@@ -228,11 +235,15 @@ class Worker(QObject):
             #* Exportar datos a hoja de excel
             values = [ad_months[i].columns] + list(ad_months[i].values)
             wb.new_sheet(ad_file.sheet_names[i], data=values)
-            self.update_progress(35 + (50/len(ad_months)))
+            cont += ((50/len(ad_months))/5)
+            self.update_progress(cont)
         #* Guardar el archvios de excel
         name_file = datetime.datetime.now().strftime("%d-%m-%Y")
         wb.save(f"Cruce_Final_Realizado_{name_file}.xlsx")
         self.update_progress(100)
+        self.msg = self.msg + f"\n\nPrograma finalizado"
+        self.msg = self.msg + f"\nSe ha creado un archivo de Excel en el directorio del programa"
+        self.error_msg.emit(str(self.msg))
         print("Archivo de excel creado")
 
 def validationOfFiles():
@@ -242,23 +253,20 @@ def validationOfFiles():
         [str]: Mensaje de error o exito
     """
     print(f"Entro a la funcion de validar files ahora si")
-    msg = "No mames"
+    msg = ""
     currentDirectory = os.listdir(os.getcwd())
     if "csv_data" not in currentDirectory:
         msg = ""
-        msg = msg + "\nNo se encuentra la carpeta 'csv_data' en el directorio del programa"
-        print(f"Va a salir de la funcion de validar files ahora si 1")
+        msg = msg + "\nNo se encuentra la carpeta 'csv_data' en el directorio del programa.\nPorfavor verifique que la carpeta se encuentre en el directorio especificado, y vuelva a ejecutar el programa \ndando click en Acerca de y luego Home"
         return msg
     if "TC" not in os.listdir(os.getcwd() + "\csv_data"):
         msg = ""
-        msg = msg + "\nNo se encuentra la carpeta 'TC' dentro de 'csv_data' en el directorio del programa"
+        msg = msg + "\nNo se encuentra la carpeta 'TC' dentro de 'csv_data' en el directorio del programa.\nPorfavor verifique que la carpeta se encuentre en el directorio especificado, y vuelva a ejecutar el programa \ndando click en Acerca de y luego Home"
     if "Query" not in os.listdir(os.getcwd() + "\csv_data"):
         msg = ""
-        msg = msg + "\nNo se encuentra la carpeta 'Query' dentro de 'csv_data' en el directorio del programa"
+        msg = msg + "\nNo se encuentra la carpeta 'Query' dentro de 'csv_data' en el directorio del programa.\nPorfavor verifique que la carpeta se encuentre en el directorio especificado, y vuelva a ejecutar el programa \ndando click en Acerca de y luego Home"
     if msg:
-        print(f"Va a salir de la funcion de validar files ahora si 2")
         return msg
-    print(f"Va a salir de la funcion de validar files ahora si 3")
     return msg
 
 if __name__ == "__main__":
